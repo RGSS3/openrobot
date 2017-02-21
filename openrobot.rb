@@ -1,1 +1,2 @@
-OpenRobot.register /M3L/ do  "nvzhuang" end
+OpenRobot.register /M3L/ do |str, msg| "nvzhuang" end
+
