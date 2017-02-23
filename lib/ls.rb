@@ -24,8 +24,9 @@ class LocalStorage
     else
       cont = file[key] || {}
       keys.each_with_index.inject cont do |h, (k, i)|
+        h[k] = {} unless h.is_a? Hash
         h[k] = value if i == keys.size - 1
-        h[k] ||= {}
+        h[k]
       end
       file[key] = cont
     end

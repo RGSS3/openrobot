@@ -5,6 +5,8 @@ module OpenRobot
       _KEY_ONLY_DOT = "不能以点号(.)为键值"
       _NO_VALUE     = "目标值未被设定"
 
+      return _NO_KEY if str.nil?
+
       lkey = str.strip
       return _NO_KEY if lkey.empty?
 
