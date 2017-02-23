@@ -38,7 +38,7 @@ class LocalStorage
     if keys.empty?
       file[key]
     else
-      file[key].dig *keys
+      file[key].dig *keys rescue nil
     end
   end
 end
