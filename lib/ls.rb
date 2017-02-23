@@ -1,6 +1,6 @@
 class LocalStorage
   def initialize(fn)
-     @fn = fn
+     @fn = "ls/#{fn}"
   end
 
   def [](*args)
@@ -13,6 +13,7 @@ class LocalStorage
      @hash.[]= *args
      IO.binwrite @fn, Marshal.dump(@hash)
   end
+<<<<<<< HEAD
 
   def self.set fn, keys, value
     return -1 if fn.empty?
@@ -41,4 +42,6 @@ class LocalStorage
       file[key].dig *keys
     end
   end
+=======
+>>>>>>> fafcd075f01dd5d75dcb19146851fcc28cfd7e5f
 end
