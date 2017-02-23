@@ -1,6 +1,6 @@
 class LocalStorage
   def initialize(fn)
-     @fn = fn
+     @fn = "ls/#{fn}"
   end
 
   def [](*args)
