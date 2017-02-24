@@ -4,6 +4,8 @@ class Fiber
 end
 
 class Enumerator
-  alias call each
+  def call(*args, **kwargs)
+    self.next
+  end
 end
 

@@ -8,8 +8,15 @@ module OpenRobot
   TIMEOUT = 1
   #todo 
   Runner = lambda{|handler, info, run, defer|
-     u = Thread.new { handler.call(info).encode('gbk', 'utf-8') }
+     
      begin  
+       u = Thread.new { 
+           begin
+             handler.call(info).encode('gbk', 'utf-8') 
+           rescue Exception 
+             nil
+           end}
+       u.abort_on_exception = true
        Timeout::timeout(TIMEOUT){
            t = Time.now
            while u.alive? && Time.now - t < 0.1
@@ -19,10 +26,10 @@ module OpenRobot
      rescue Exception
      end 
     
-     if u.alive?
+     if u && u.alive?
        defer[u] = {info: info, value: 1}
      else
-       run << [info[:all][2], u.value]
+       run << [info[:all][2], u.value] if u
      end
   }
 
