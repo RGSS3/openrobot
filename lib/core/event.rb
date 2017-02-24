@@ -29,7 +29,7 @@ module OpenRobot
      if u && u.alive?
        defer[u] = {info: info, value: 1}
      else
-       run << [info[:all][2], u.value] if u
+       run << [info[:all][2], u.value] if u && u.value
      end
   }
 
@@ -46,7 +46,7 @@ module OpenRobot
      if obj.alive?
        defer[obj] = {info: value[:info], value: value[:value] + 1}
      else
-       run << [value[:info][:all][2], obj.value]
+       run << [value[:info][:all][2], obj.value] if obj.value
      end
   }
      
