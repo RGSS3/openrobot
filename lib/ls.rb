@@ -18,15 +18,18 @@ class LocalStorage
     return -1 if fn.empty?
     return -2 if keys.empty?
     file = self.new fn
-    key  = keys.shift
+    key  = keys.clone.shift
     if keys.empty?
       file[key] = value
     else
       cont = file[key] || {}
+      cont = {} unless cont.is_a? Hash
       keys.each_with_index.inject cont do |h, (k, i)|
-        h[k] = {} unless h.is_a? Hash
-        h[k] = value if i == keys.size - 1
-        h[k]
+        if i == keys.size - 1
+          h[k] = value
+        else
+          h[k] = {} unless h[k].is_a? Hash
+        end
       end
       file[key] = cont
     end
@@ -35,7 +38,7 @@ class LocalStorage
 
   def self.get fn, keys
     file = self.new fn
-    key  = keys.shift
+    key  = keys.clone.shift
     if keys.empty?
       file[key]
     else
