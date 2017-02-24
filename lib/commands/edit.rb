@@ -14,8 +14,9 @@ module OpenRobot
         return _NO_PERMISSION unless user_id == oreq[1] || Privilege.find_user_group(user_id).include?(1)
         Request.execute 'delete from runtime_scripts where id = ?', id
         OpenRobot.current[3] = oreq[1]
-        do_request content
+        ret = do_request content
         OpenRobot.current[3] = user_id
+        ret
       else
         _INVALID_FORMAT
       end
