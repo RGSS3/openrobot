@@ -1,4 +1,5 @@
 require 'lib/ls'
+require 'json'
 module OpenRobot
   module Command
     def self.do_set str
