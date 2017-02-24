@@ -9,7 +9,6 @@ module OpenRobot
   #todo 
   Runner = lambda{|handler, info, run, defer|
      u = Thread.new { handler.call(info).encode('gbk', 'utf-8') }
-    
      begin  
        Timeout::timeout(0.1){
            t = Time.now
