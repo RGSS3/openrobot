@@ -5,8 +5,8 @@ module OpenRobot
       _NO_REQUEST_FOUND = "呜~没有找到这个请求: %s"
       _DONE             = "诶嘿~~~ %s 已经添加到运行时"
 
-      return _INVALID_FORMAT unless str.strip =~ /^(\d+)\s/
-      request_id = *str.strip.split ?\s
+      return _INVALID_FORMAT unless str.strip =~ /^(\d+)/
+      request_id = str.strip.split(/\s+/)[0]
 
       request = Request.execute 'select id from request where id = ?', request_id
       request = request.flatten
@@ -14,6 +14,8 @@ module OpenRobot
 
       Request.execute 'insert into runtime_scripts values (?)', request_id
       _DONE % request_id
+    rescue Object
+      $!.backtrace.unshift($!.to_s).join("\n")
     end
   end
 end
