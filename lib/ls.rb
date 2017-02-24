@@ -30,6 +30,7 @@ class LocalStorage
         else
           h[k] = {} unless h[k].is_a? Hash
         end
+        h[k]
       end
       file[key] = cont
     end
