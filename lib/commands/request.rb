@@ -6,7 +6,7 @@ module OpenRobot
     def self.do_request(str)
       user_id = OpenRobot.current[3]
       hash = Digest::MD5.hexdigest(Time.now.to_s + rand(1048576).to_s)
-      Request.execute "insert into request values (NULL, ?, ?, ?)", hash, str, user_id 
+      Request.execute "insert into request values (NULL, ?, ?, ?, NULL)", hash, str, user_id  
       id = Request.execute "select id from request where hash = ?", hash
       id = id.flatten[0]
       "OK: 已经存在请求 #{id} 中. 需要三个其他用户使用\n:vote #{id}\n命令来认可加入到运行时"

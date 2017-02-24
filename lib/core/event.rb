@@ -5,12 +5,12 @@ module OpenRobot
   end
   PROCS   = {}
   DEFERED = {}
-  
+  TIMEOUT = 1
   #todo 
   Runner = lambda{|handler, info, run, defer|
      u = Thread.new { handler.call(info).encode('gbk', 'utf-8') }
      begin  
-       Timeout::timeout(0.1){
+       Timeout::timeout(TIMEOUT){
            t = Time.now
            while u.alive? && Time.now - t < 0.1
              Thread.pass
@@ -28,7 +28,7 @@ module OpenRobot
 
   DeferedRunner = lambda{|obj, run, defer, value| 
       begin  
-       Timeout::timeout(0.1){
+       Timeout::timeout(TIMEOUT){
            t = Time.now
            while obj.alive? && Time.now - t < 0.1
             Thread.pass
