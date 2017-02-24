@@ -37,7 +37,7 @@ class LocalStorage
       keys.each_with_index.inject cont do |h, (k, i)|
         if i == keys.size - 1
           if value.nil?
-            h[k].delete k
+            h.delete k
           else
             h[k] = value
           end
