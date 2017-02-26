@@ -5,9 +5,9 @@ P   = Privilege
 PE  = P::Entity
 PR  = P::Relation
 
-S   = O::Store
+Store  = O::Store
 def S(*args)
-  S.new(*args)
+  O::Store.new(*args)
 end
 
 def R(*args, &block)

@@ -81,6 +81,7 @@ module OpenRobot
     self.current = args
     msg = CGI.unescapeHTML((args[-2].force_encoding("GBK")).encode("UTF-8"))
     fromQQ = args[3]
+    fromGroup = args[2]
     case msg 
       when /\A:(\S+)\s+([\w\W]*)\Z/, /\A:(\S+)\s*/
         name, arg = $1, ($2 || "")
@@ -89,7 +90,7 @@ module OpenRobot
            return "Error 101: no such special command #{name}".encode('gbk', 'utf-8')
         end
         unless Privilege.find_user_all_priv(fromQQ).include?(priv_id)
-          return "Error 100: can't run #{$1} from #{fromQQ}, user/group not allowed".encode('gbk', 'utf-8')
+          return  "Error 100: can't run #{$1} from #{fromQQ}, user/group not allowed".encode('gbk', 'utf-8')
         end
         begin
           require "lib/commands/#{name}.rb"
@@ -97,12 +98,13 @@ module OpenRobot
           return "Error 101: no such special command #{name}".encode('gbk', 'utf-8')
         end
 	  begin
-          OpenRobot::Command.send("do_#{name}", arg).encode('gbk', 'utf-8')
+          return OpenRobot::Command.send("do_#{name}", arg).encode('gbk', 'utf-8')
         rescue Exception
          # return "Error 102: can't execute #{name}"
 	        return $!.backtrace.unshift($!.to_s).join("\n").encode('gbk', 'utf-8')
         end
       else
+      begin
         ret = []
            
         newdef = {}
@@ -138,19 +140,23 @@ module OpenRobot
                      Runner.call(z, {message: msg, match: $~, qq: args[3], all: OpenRobot.current, store: nil}, ret, DEFERED)
                  rescue Exception
                      STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
-		                 #ret << $!.backtrace.unshift($!.to_s).join("\n")
+		                 ret << $!.backtrace.unshift($!.to_s).join("\n")
                  end
                }
              end
           rescue Exception
                      STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
-		                 #ret << $!.backtrace.unshift($!.to_s).join("\n")
+		                 ret << $!.backtrace.unshift($!.to_s).join("\n")
           end
         }
      
         SESSIONS[pair] = NEXTSESSIONS[pair]
         NEXTSESSIONS.delete pair if NEXTSESSIONS[pair]
         ret
+       rescue Exception
+         # return "Error 102: can't execute #{name}"
+	        return $!.backtrace.unshift($!.to_s).join("\n").encode('gbk', 'utf-8')
+        end
     end
   
   end
