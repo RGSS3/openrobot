@@ -24,7 +24,8 @@ class LocalStorage
     return -1 if fn.empty?
     return -2 if keys.empty?
     file = self.new fn
-    key  = keys.clone.shift
+    keys = keys.clone
+    key  = keys.shift
     if keys.empty?
       if value.nil?
         file.delete key
@@ -53,7 +54,8 @@ class LocalStorage
 
   def self.get fn, keys
     file = self.new fn
-    key  = keys.clone.shift
+    keys = keys.clone
+    key  = keys.shift
     if keys.empty?
       file[key]
     else
