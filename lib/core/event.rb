@@ -3,16 +3,40 @@ module OpenRobot
   class << self
     attr_accessor :current
   end
-  PROCS   = {}
-  DEFERED = {}
-  TIMEOUT = 1
+  
+  Store   = Struct.new :message, :env 
+  Direct  = Struct.new :group_id, :message
+  Defer   = Struct.new :info, :count, :handler
+  Session = Struct.new :store, :handler
+  
+  PROCS    = {}
+  DEFERED  = {}
+  SESSIONS = {}
+  NEXTSESSIONS = {}
+  TIMEOUT  = 1
   #todo 
+
+  Intepreter = lambda{|value, info, handler, run, defer|
+      case
+      when String === value
+        state = [info[:all][2], info[:all][3]]
+        NEXTSESSIONS[state] ||= {}
+        NEXTSESSIONS[state].delete handler
+        run << [info[:all][2], value.encode('gbk')]
+      when Store === value
+        Intepreter.call(value.message, info, handler, run, defer)
+        state = [info[:all][2], info[:all][3]]
+        NEXTSESSIONS[state] ||= {}
+        NEXTSESSIONS[state][handler] = value
+      end
+  }
+  
+  
   Runner = lambda{|handler, info, run, defer|
-     
      begin  
        u = Thread.new { 
            begin
-             handler.call(info).encode('gbk', 'utf-8') 
+             handler.call(info)
            rescue Exception 
              nil
            end}
@@ -27,9 +51,9 @@ module OpenRobot
      end 
     
      if u && u.alive?
-       defer[u] = {info: info, value: 1}
+       defer[u] = Defer.new info, 1, handler
      else
-       run << [info[:all][2], u.value] if u && u.value
+       Intepreter.call(u.value, info, handler, run, defer) if u.value
      end
   }
 
@@ -44,9 +68,9 @@ module OpenRobot
      rescue Exception
      end 
      if obj.alive?
-       defer[obj] = {info: value[:info], value: value[:value] + 1}
+       defer[obj] = Defer.new(value.info, value.count + 1, value.handler)
      else
-       run << [value[:info][:all][2], obj.value] if obj.value
+       Intepreter.call(obj.value, value.info, value.handler, run, defer) if obj.value
      end
   }
      
@@ -92,25 +116,43 @@ module OpenRobot
         DEFERED.clear
         DEFERED.update(newdef)
 
+        pair = [args[2], args[3]]
+        STDERR.puts SESSIONS.inspect
+        if SESSIONS[pair]
+         begin
+          SESSIONS[pair].each{|handler, store|
+                STDERR.puts [handler, store].inspect
+                Runner.call(handler, {message: msg, match: nil, qq: args[3], all: OpenRobot.current, store: store}, ret, DEFERED)            
+          }
+          
+          rescue Exception
+                STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
+            end
+        end
+        
         PROCS.each{|k, v|
           begin
              if k === msg
                v.each{|z|
                  begin
-                   Runner.call(z, {message: msg, match: $~, qq: args[3], all: OpenRobot.current}, ret, DEFERED)
+                     Runner.call(z, {message: msg, match: $~, qq: args[3], all: OpenRobot.current, store: nil}, ret, DEFERED)
                  rescue Exception
-		                # ret << $!.backtrace.unshift($!.to_s).join("\n")
+                     STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
+		                 #ret << $!.backtrace.unshift($!.to_s).join("\n")
                  end
                }
              end
           rescue Exception
-            #ret << $!.backtrace.unshift($!.to_s).join("\n")
+                     STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
+		                 #ret << $!.backtrace.unshift($!.to_s).join("\n")
           end
         }
      
-        
+        SESSIONS[pair] = NEXTSESSIONS[pair]
+        NEXTSESSIONS.delete pair if NEXTSESSIONS[pair]
         ret
     end
+  
   end
 
   
