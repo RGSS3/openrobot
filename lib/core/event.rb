@@ -19,7 +19,7 @@ module OpenRobot
        u.abort_on_exception = true
        Timeout::timeout(TIMEOUT){
            t = Time.now
-           while u.alive? && Time.now - t < 0.1
+           while u.alive? && Time.now - t < TIMEOUT
              Thread.pass
            end
        }
@@ -37,7 +37,7 @@ module OpenRobot
       begin  
        Timeout::timeout(TIMEOUT){
            t = Time.now
-           while obj.alive? && Time.now - t < 0.1
+           while obj.alive? && Time.now - t < TIMEOUT
             Thread.pass
            end
        }
@@ -109,7 +109,7 @@ module OpenRobot
         }
      
         
-        p ret
+        ret
     end
   end
 
