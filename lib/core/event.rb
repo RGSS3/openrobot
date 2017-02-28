@@ -6,33 +6,58 @@ module OpenRobot
   
   Store   = Struct.new :message, :env 
   Direct  = Struct.new :group_id, :message
-  Defer   = Struct.new :info, :count, :handler
-  Session = Struct.new :store, :handler
-  
+  Defer   = Struct.new :info, :count, :handler, :session_id
+  Session = Struct.new :store, :handler, :clients
+  JoinSession = Struct.new :client
   PROCS    = {}
   DEFERED  = {}
   SESSIONS = {}
-  NEXTSESSIONS = {}
   TIMEOUT  = 1
+  SESSION_ID = {value: 0}
+ 
   #todo 
 
-  Intepreter = lambda{|value, info, handler, run, defer|
+  Intepreter = lambda{|value, info, handler, run, defer, session_id|
       case
       when String === value
-        state = [info[:all][2], info[:all][3]]
-        NEXTSESSIONS[state] ||= {}
-        NEXTSESSIONS[state].delete handler
+        if session_id
+          SESSIONS[session_id].store = nil
+        end
         run << [info[:all][2], value.encode('gbk')]
       when Store === value
-        Intepreter.call(value.message, info, handler, run, defer)
-        state = [info[:all][2], info[:all][3]]
-        NEXTSESSIONS[state] ||= {}
-        NEXTSESSIONS[state][handler] = value
+        Intepreter.call(value.message, info, handler, run, defer, session_id)
+        if session_id
+          SESSIONS[session_id].store = value
+        else
+          SESSION_ID[:value] += 1
+          session_id = SESSION_ID[:value]
+          pair = [info[:all][2], info[:all][3]]
+          SESSIONS[session_id] = Session.new value, handler, [pair]
+          run << [info[:all][2], "session #{session_id} created"]
+        end
+      when NilClass === value
+      when JoinSession === value
+         if session_id
+          SESSIONS[session_id].clients << value.client
+        else
+          SESSION_ID[:value] += 1
+          session_id = SESSION_ID[:value]
+          pair = [info[:all][2], info[:all][3]]
+          SESSIONS[session_id] = Session.new value, handler, [pair, value.client]
+          run << [info[:all][2], "session #{session_id} created"]
+        end
+      when Array === value
+         value.each{|x|
+            Intepreter.call(x, info, handler, run, defer, session_id)
+         }
+      
+      else
+         run << [info[:all][2], "不能理解的值 #{value.class.to_s}".encode('gbk', 'utf-8                               ')]
       end
   }
   
   
-  Runner = lambda{|handler, info, run, defer|
+  Runner = lambda{|handler, info, run, defer, session_id|
      begin  
        u = Thread.new { 
            begin
@@ -51,9 +76,9 @@ module OpenRobot
      end 
     
      if u && u.alive?
-       defer[u] = Defer.new info, 1, handler
+       defer[u] = Defer.new info, 1, handler, session_id
      else
-       Intepreter.call(u.value, info, handler, run, defer) if u.value
+       Intepreter.call(u.value, info, handler, run, defer, session_id) if u.value
      end
   }
 
@@ -68,9 +93,9 @@ module OpenRobot
      rescue Exception
      end 
      if obj.alive?
-       defer[obj] = Defer.new(value.info, value.count + 1, value.handler)
+       defer[obj] = Defer.new(value.info, value.count + 1, value.handler, value.session_id)
      else
-       Intepreter.call(obj.value, value.info, value.handler, run, defer) if obj.value
+       Intepreter.call(obj.value, value.info, value.handler, run, defer, obj.session_id) if obj.value
      end
   }
      
@@ -97,7 +122,7 @@ module OpenRobot
         rescue LoadError
           return "Error 101: no such special command #{name}".encode('gbk', 'utf-8')
         end
-	  begin
+	      begin
           return OpenRobot::Command.send("do_#{name}", arg).encode('gbk', 'utf-8')
         rescue Exception
          # return "Error 102: can't execute #{name}"
@@ -118,26 +143,23 @@ module OpenRobot
         DEFERED.clear
         DEFERED.update(newdef)
 
-        pair = [args[2], args[3]]
-        STDERR.puts SESSIONS.inspect
-        if SESSIONS[pair]
-         begin
-          SESSIONS[pair].each{|handler, store|
-                STDERR.puts [handler, store].inspect
-                Runner.call(handler, {message: msg, match: nil, qq: args[3], all: OpenRobot.current, store: store}, ret, DEFERED)            
-          }
-          
-          rescue Exception
-                STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
+         pair = [args[2], args[3]]
+         allmember = [args[2], :all]
+         SESSIONS.each{|id, session|
+            if session && session.clients && (session.clients.include?(pair) || session.clients.include?(allmember))
+               Runner.call(session.handler, {message: msg, match: nil, qq: args[3], all: OpenRobot.current, store: session.store}, ret, DEFERED, id)
             end
-        end
-        
+         }
+         SESSIONS.delete_if{|id, session|
+            !session || !session.store || session.store.env == nil 
+         }
+
         PROCS.each{|k, v|
           begin
              if k === msg
                v.each{|z|
                  begin
-                     Runner.call(z, {message: msg, match: $~, qq: args[3], all: OpenRobot.current, store: nil}, ret, DEFERED)
+                     Runner.call(z, {message: msg, match: $~, qq: args[3], all: OpenRobot.current, store: nil}, ret, DEFERED, nil)
                  rescue Exception
                      STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
 		                 ret << $!.backtrace.unshift($!.to_s).join("\n")
@@ -150,8 +172,7 @@ module OpenRobot
           end
         }
      
-        SESSIONS[pair] = NEXTSESSIONS[pair]
-        NEXTSESSIONS.delete pair if NEXTSESSIONS[pair]
+     
         ret
        rescue Exception
          # return "Error 102: can't execute #{name}"

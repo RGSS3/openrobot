@@ -26,6 +26,7 @@ module OpenRobot
     end
     def self.do_reset(str)
       OpenRobot::PROCS.clear
+      OpenRobot::SESSIONS.clear
       ret = []
       count = 0
       error = 0
