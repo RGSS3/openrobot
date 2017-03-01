@@ -10,6 +10,12 @@ def S(*args)
   O::Store.new(*args)
 end
 
+def D(&block)
+  t = Thread.new(&block)
+  t.abort_on_exception=true
+  O::DeferedValue.new(t)
+end
+
 def R(*args, &block)
   OpenRobot.register *args, &block
 end

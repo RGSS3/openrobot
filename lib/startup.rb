@@ -2,6 +2,7 @@ Perm = Privilege
 require 'tempfile'
 require 'json'
 require 'rqrcode'
+ENV['path'] += ";C:\\curl"
 class Fiber
   alias call resume
 end

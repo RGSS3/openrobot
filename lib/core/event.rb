@@ -1,4 +1,5 @@
 require 'timeout'
+require 'thread'
 module OpenRobot
   class << self
     attr_accessor :current
@@ -7,7 +8,8 @@ module OpenRobot
   Store   = Struct.new :message, :env 
   Direct  = Struct.new :group_id, :message
   Defer   = Struct.new :info, :count, :handler, :session_id
-  Session = Struct.new :store, :handler, :clients
+  DeferedValue = Struct.new :obj
+  Session = Struct.new :store, :handler, :clients, :mutex
   JoinSession = Struct.new :client
   PROCS    = {}
   DEFERED  = {}
@@ -20,7 +22,7 @@ module OpenRobot
   Intepreter = lambda{|value, info, handler, run, defer, session_id|
       case
       when String === value
-        if session_id
+        if session_id && SESSIONS[session_id]
           SESSIONS[session_id].store = nil
         end
         run << [info[:all][2], value.encode('gbk')]
@@ -32,10 +34,12 @@ module OpenRobot
           SESSION_ID[:value] += 1
           session_id = SESSION_ID[:value]
           pair = [info[:all][2], info[:all][3]]
-          SESSIONS[session_id] = Session.new value, handler, [pair]
+          SESSIONS[session_id] = Session.new value, handler, [pair], Mutex.new
           run << [info[:all][2], "session #{session_id} created"]
         end
       when NilClass === value
+      when DeferedValue === value
+          defer[value.obj] = Defer.new info, 1, handler, session_id
       when JoinSession === value
          if session_id
           SESSIONS[session_id].clients << value.client
@@ -43,7 +47,7 @@ module OpenRobot
           SESSION_ID[:value] += 1
           session_id = SESSION_ID[:value]
           pair = [info[:all][2], info[:all][3]]
-          SESSIONS[session_id] = Session.new value, handler, [pair, value.client]
+          SESSIONS[session_id] = Session.new value, handler, [pair, value.client], Mutex.new
           run << [info[:all][2], "session #{session_id} created"]
         end
       when Array === value
@@ -95,10 +99,16 @@ module OpenRobot
      if obj.alive?
        defer[obj] = Defer.new(value.info, value.count + 1, value.handler, value.session_id)
      else
-       Intepreter.call(obj.value, value.info, value.handler, run, defer, obj.session_id) if obj.value
+       Intepreter.call(obj.value, value.info, value.handler, run, defer, value.session_id) if obj.value
      end
   }
      
+  def self.on_general(type, *args)
+    case type
+    when "private"
+      on_group args[0], args[1], -args[2], args[2], args[3], args[4]
+    end
+  end
   
   #def self.on_group(subtype, sendtime, fromGroup, fromQQ, anonymous, msg, font)
   def self.on_group(*args)
@@ -135,9 +145,10 @@ module OpenRobot
         newdef = {}
         DEFERED.each{|k, v|
           begin
-           DeferedRunner.call(k, ret, newdef, v)
+            DeferedRunner.call(k, ret, newdef, v)
           rescue Exception
-            puts $!.backtrace.unshift($!.to_s).join("\n")
+            STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
+		        ret << $!.backtrace.unshift($!.to_s).join("\n")
           end
         }
         DEFERED.clear
@@ -146,8 +157,15 @@ module OpenRobot
          pair = [args[2], args[3]]
          allmember = [args[2], :all]
          SESSIONS.each{|id, session|
-            if session && session.clients && (session.clients.include?(pair) || session.clients.include?(allmember))
-               Runner.call(session.handler, {message: msg, match: nil, qq: args[3], all: OpenRobot.current, store: session.store}, ret, DEFERED, id)
+            if session && session.clients && (session.clients.include?(pair) || (args[2] > 0 && session.clients.include?(allmember)))
+               begin
+                session.mutex.synchronize{
+                   Runner.call(session.handler, {message: msg, match: nil, qq: args[3], all: OpenRobot.current, store: session.store}, ret, DEFERED, id)
+                }
+               rescue Exception
+                     STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
+		                 ret << $!.backtrace.unshift($!.to_s).join("\n")
+               end
             end
          }
          SESSIONS.delete_if{|id, session|
