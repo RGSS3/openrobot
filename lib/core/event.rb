@@ -9,7 +9,7 @@ module OpenRobot
   Direct  = Struct.new :group_id, :message
   Defer   = Struct.new :info, :count, :handler, :session_id
   DeferedValue = Struct.new :obj
-  Session = Struct.new :store, :handler, :clients, :mutex
+  Session = Struct.new :store, :handler, :clients, :mutex, :thread
   JoinSession = Struct.new :client
   PROCS    = {}
   DEFERED  = {}
@@ -25,7 +25,7 @@ module OpenRobot
         if session_id && SESSIONS[session_id]
           SESSIONS[session_id].store = nil
         end
-        run << [info[:all][2], value.encode('gbk')]
+        run << [info[:all][2], value.encode('gbk', 'utf-8', replace: '?')]
       when Store === value
         Intepreter.call(value.message, info, handler, run, defer, session_id)
         if session_id
@@ -56,20 +56,19 @@ module OpenRobot
          }
       
       else
-         run << [info[:all][2], "不能理解的值 #{value.class.to_s}".encode('gbk', 'utf-8                               ')]
+         run << [info[:all][2], "不能理解的值 #{value.class.to_s}".encode('gbk', 'utf-8', replace: '?')]
       end
   }
   
   
   Runner = lambda{|handler, info, run, defer, session_id|
      begin  
-       u = Thread.new { 
-           begin
-             handler.call(info)
-           rescue Exception 
-             nil
-           end}
-       u.abort_on_exception = true
+       u = Thread.new{
+         begin
+           handler.call(info)
+         rescue Exception
+         end
+       }.tap{|x| x.abort_on_exception = true }
        Timeout::timeout(TIMEOUT){
            t = Time.now
            while u.alive? && Time.now - t < TIMEOUT
@@ -109,10 +108,33 @@ module OpenRobot
       on_group args[0], args[1], -args[2], args[2], args[3], args[4]
     end
   end
+
+  def self.on_idle
+    begin
+        ret = []
+           
+        newdef = {}
+        DEFERED.each{|k, v|
+          begin
+            DeferedRunner.call(k, ret, newdef, v)
+          rescue Exception
+            STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
+		        ret << $!.backtrace.unshift($!.to_s).join("\n")
+          end
+        }
+        DEFERED.clear
+        DEFERED.update(newdef)
+
+        ret
+    rescue Exception
+        return $!.backtrace.unshift($!.to_s).join("\n").encode('gbk', 'utf-8', replace: '?')
+    end
+  end
   
   #def self.on_group(subtype, sendtime, fromGroup, fromQQ, anonymous, msg, font)
   def self.on_group(*args)
-    return if  !GROUP.include?(args[2])
+    return if  !GROUP.include?(args[2]) && !Privilege.user_has_privilege(args[2], 'grouptalk') 
+    return if  Privilege.user_has_privilege(args[3], 'ban')
     self.current = args
     msg = CGI.unescapeHTML((args[-2].force_encoding("GBK")).encode("UTF-8"))
     fromQQ = args[3]
@@ -122,21 +144,21 @@ module OpenRobot
         name, arg = $1, ($2 || "")
         priv_id = Privilege.find_priv_id(name)
         if !priv_id
-           return "Error 101: no such special command #{name}".encode('gbk', 'utf-8')
+           return "Error 101: no such special command #{name}".encode('gbk', 'utf-8', replace: '?')
         end
         unless Privilege.find_user_all_priv(fromQQ).include?(priv_id)
-          return  "Error 100: can't run #{$1} from #{fromQQ}, user/group not allowed".encode('gbk', 'utf-8')
+          return  "Error 100: can't run #{$1} from #{fromQQ}, user/group not allowed".encode('gbk', 'utf-8', replace: '?')
         end
         begin
           require "lib/commands/#{name}.rb"
         rescue LoadError
-          return "Error 101: no such special command #{name}".encode('gbk', 'utf-8')
+          return "Error 101: no such special command #{name}".encode('gbk', 'utf-8', replace: '?')
         end
 	      begin
-          return OpenRobot::Command.send("do_#{name}", arg).encode('gbk', 'utf-8')
+          return OpenRobot::Command.send("do_#{name}", arg).encode('gbk', 'utf-8', replace: '?')
         rescue Exception
          # return "Error 102: can't execute #{name}"
-	        return $!.backtrace.unshift($!.to_s).join("\n").encode('gbk', 'utf-8')
+	        return $!.backtrace.unshift($!.to_s).join("\n").encode('gbk', 'utf-8', replace: '?')
         end
       else
       begin
@@ -194,7 +216,7 @@ module OpenRobot
         ret
        rescue Exception
          # return "Error 102: can't execute #{name}"
-	        return $!.backtrace.unshift($!.to_s).join("\n").encode('gbk', 'utf-8')
+	        return $!.backtrace.unshift($!.to_s).join("\n").encode('gbk', 'utf-8', replace: '?')
         end
     end
   

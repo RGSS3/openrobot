@@ -18,7 +18,7 @@ module OpenRobot
       end
       if !result.empty?
         result.map{|x|
-           x[1]
+           x[1].gsub("[", "&#91;").gsub("]", "&#93;")
         }.join("\n\n")
       else
         "没有结果 #{str}"

@@ -13,6 +13,31 @@ module OpenRobot
     rescue Exception
       $!.backtrace.unshift($!.to_s).join("\n")
     end
+   
+   module Handler
+      def self.exec_script(script)
+        if script=~/^#-(\S+)/
+          handler = "do_#{$1}"
+          if respond_to?(handler)
+            send handler, script
+          else
+            raise "找不到#{handler}"
+          end
+        else
+           do_normal script
+        end
+      end
+
+
+      def self.do_normal(script)
+        RubyVM::InstructionSequence.compile(script).eval
+      end
+
+      def self.do_yaml(script)
+        require 'runners/yaml/yaml'
+        
+      end
+    end
 
     def self._newbinding
       x = eval %{
@@ -35,11 +60,11 @@ module OpenRobot
         hash, res, user_id = Request.execute("select hash, content, user_id from request where id = ?", x).flatten
         begin
            #eval "lambda{\n#{res}\n}.call", _newbinding, "<request:#{x}>", 1
-           RubyVM::InstructionSequence.compile(res).eval
+           Handler.exec_script(res)
            count += 1
         rescue Exception
            Request.execute("delete from runtime_scripts where id = ?", x).flatten
-           ret << "#{user_id} #{x}发生错误"
+           ret << "#{user_id} #{x}发生错误 #{$!.to_s}"
            error += 1
         end
       }

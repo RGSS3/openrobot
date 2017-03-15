@@ -4,10 +4,29 @@ OCR = O::Command::Request
 P   = Privilege
 PE  = P::Entity
 PR  = P::Relation
-
+require 'net/http'
+require 'openssl'
 Store  = O::Store
 def S(*args)
   O::Store.new(*args)
+end
+
+def HTTPS(uri, *a)
+   url = URI(uri)
+   Net::HTTP.start(url.host, url.port, *a, use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_NONE) do |http|
+    request = Net::HTTP::Get.new(url.request_uri)
+    response = http.request(request)
+    response.body
+  end
+end
+
+def HTTP(uri, *a)
+   url = URI(uri)
+   Net::HTTP.start(url.host, url.port, *a) do |http|
+    request = Net::HTTP::Get.new(url.request_uri)
+    response = http.request(request)
+    response.body
+  end
 end
 
 def D(&block)
@@ -83,13 +102,112 @@ class SessionHelper
     end
 end
 
+
+
+class SessionHelper2
+   class Runner 
+      attr_accessor :data, :info, :fib, :block
+      def initialize(&block)
+          self.block = block
+          self.fib   = Fiber.new{ instance_exec &self.block }
+      end
+
+      def call(info)
+          self.info = OpenStruct.new(info)
+          self.fib.resume info[:message]
+      end
+
+      def send! *args
+        Fiber.yield *args
+      end
+   end
+
+
+   def initialize(&block)
+     @block = block
+   end
+
+   def call(info)   
+     if !info[:store] || !info[:store].env
+       f = Runner.new(&@block)
+       u = f.call(info)
+       S u, f
+     else
+       f = info[:store].env
+       u = f.call(info)
+       S u, (!f.data ? nil : f)
+     end
+   rescue Exception
+      $!.backtrace.unshift($!.to_s).join("\n")
+   end
+end
+
+SH2 = SessionHelper2
+
+class SessionHelper3
+  class Runner
+    attr_accessor :states, :data, :info
+    def state(name, lb = nil, &bl)
+      states[name] = lb || bl
+    end
+
+    def initialize(&block)
+      @states = {}
+      @states [
+        :finish
+      ] = lambda{|*|
+       self.data = nil
+      }
+      @states [
+        :init 
+      ] = lambda{|*|
+         transit :finish, nil
+      }
+      instance_exec &block
+      @current = :init
+    end
+
+    def call(info)
+      self.info = OpenStruct === info ? info : OpenStruct.new(info)
+      instance_exec info[:message], &states[@current]
+    end
+
+    def transit(nextstate, ret)
+      @current = nextstate
+      ret
+    end
+
+  end
+
+   def initialize(&block)
+     @block = block 
+   end
+ 
+   def call(info)   
+     if !info[:store] || !info[:store].env
+       f = Runner.new(&@block)
+       u = f.call(info)
+       S u, f
+     else
+       f = info[:store].env
+       u = f.call(info)
+       S u, (!f.data ? nil : f)
+     end
+   rescue Exception
+      $!.backtrace.unshift($!.to_s).join("\n")
+   end
+
+end
+
+SH3 = SessionHelper3
+
 def RSH pattern, name, init, msg = nil, &block
    R pattern, SessionHelper.new(name, init, msg || "{{qq}} 开始了 #{name}", &block)
 end
 
-def TempImage(a, b)
+def TempImage(*a)
   Tempfile.open(["image-", ".png"], "data/image/tmp", mode: File::BINARY) do |f|
-    img = Image.new(a, b)
+    img = Image.new(*a)
     yield img
     f.close
     img.write "png:#{f.path}"
@@ -97,3 +215,68 @@ def TempImage(a, b)
   end
 end
 
+def TempImageData(*data)
+  Tempfile.open(["image-", ".png"], "data/image/tmp", mode: File::BINARY) do |f|
+    yield f
+    f.close
+    "[CQ:image,file=tmp/#{File.basename(f.path)}]"
+  end
+end
+
+class RunDocker
+  IMAGE = {"php" => "php", "ghc" => "mitchty/alpine-ghc"}
+  def run(lang, cmdline,  opt = {}) 
+    Dir.mktmpdir("run", "tmp") do |dir|
+    begin
+      tmpname = File.basename(dir)
+      image   = IMAGE[lang] || "ruby"
+      IO.binwrite "#{dir}/Dockerfile", %{
+FROM #{image}
+#{
+  opt.map do |k, v|
+    "ADD #{k} ~/#{k}"
+  end.join("\n")
+}
+CMD [#{cmdline.inspect}]
+}.delete("\r")
+      opt.each{|k, v|
+        IO.binwrite "#{dir}/#{k}", v
+      }
+      IO.write "#{dir}/run.cmd", "
+@docker build -t #{tmpname}:0.01 tmp/#{tmpname} --force-rm 1>nul 2>&1
+@docker run --rm -a stdin -a stdout -a stderr -i -t #{tmpname}:0.01
+@docker rmi -f #{tmpname}:0.01 > nul
+"
+
+      ret = `#{dir}\\run.cmd`
+      Dir.glob("#{dir}/*") do |f| File.delete f end 
+      ret.chomp("\n")
+       
+    end
+    end
+  end
+end
+
+class Res
+  def initialize(desc, &block)
+    @desc = desc
+    @block = block
+  end
+
+  def get
+    case @desc
+    when /^https/
+       HTTPS @desc
+    when /^http/
+       HTTP @desc
+    when :ximg
+       TempImageData(&block)
+    when :html
+       #
+    else
+       raise
+    end
+  end
+
+  
+end
