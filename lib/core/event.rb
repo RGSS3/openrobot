@@ -1,10 +1,24 @@
 require 'timeout'
 require 'thread'
+
+class String
+  if RUBY_VERSION < "2.4"
+    def openrobot_encoding
+      encode('gbk', 'utf-8', replace: '?')
+    end
+  else
+    def openrobot_encoding
+      self
+    end
+  end
+end
 module OpenRobot
   class << self
     attr_accessor :current
   end
   
+
+
   Store   = Struct.new :message, :env 
   Direct  = Struct.new :group_id, :message
   Defer   = Struct.new :info, :count, :handler, :session_id
@@ -16,7 +30,7 @@ module OpenRobot
   SESSIONS = {}
   TIMEOUT  = 1
   SESSION_ID = {value: 0}
- 
+  
   #todo 
 
   Intepreter = lambda{|value, info, handler, run, defer, session_id|
@@ -25,7 +39,7 @@ module OpenRobot
         if session_id && SESSIONS[session_id]
           SESSIONS[session_id].store = nil
         end
-        run << [info[:all][2], value.encode('gbk', 'utf-8', replace: '?')]
+        run << [info[:all][2], value.openrobot_encoding]
       when Store === value
         Intepreter.call(value.message, info, handler, run, defer, session_id)
         if session_id
@@ -56,7 +70,7 @@ module OpenRobot
          }
       
       else
-         run << [info[:all][2], "不能理解的值 #{value.class.to_s}".encode('gbk', 'utf-8', replace: '?')]
+         run << [info[:all][2], "不能理解的值 #{value.class.to_s}".openrobot_encoding]
       end
   }
   
@@ -127,7 +141,7 @@ module OpenRobot
 
         ret
     rescue Exception
-        return $!.backtrace.unshift($!.to_s).join("\n").encode('gbk', 'utf-8', replace: '?')
+        return $!.backtrace.unshift($!.to_s).join("\n").openrobot_encoding
     end
   end
   
@@ -144,21 +158,21 @@ module OpenRobot
         name, arg = $1, ($2 || "")
         priv_id = Privilege.find_priv_id(name)
         if !priv_id
-           return "Error 101: no such special command #{name}".encode('gbk', 'utf-8', replace: '?')
+           return "Error 101: no such special command #{name}".openrobot_encoding
         end
         unless Privilege.find_user_all_priv(fromQQ).include?(priv_id)
-          return  "Error 100: can't run #{$1} from #{fromQQ}, user/group not allowed".encode('gbk', 'utf-8', replace: '?')
+          return  "Error 100: can't run #{$1} from #{fromQQ}, user/group not allowed".openrobot_encoding
         end
         begin
           require "lib/commands/#{name}.rb"
         rescue LoadError
-          return "Error 101: no such special command #{name}".encode('gbk', 'utf-8', replace: '?')
+          return "Error 101: no such special command #{name}".openrobot_encoding
         end
 	      begin
-          return OpenRobot::Command.send("do_#{name}", arg).encode('gbk', 'utf-8', replace: '?')
+          return OpenRobot::Command.send("do_#{name}", arg).openrobot_encoding
         rescue Exception
          # return "Error 102: can't execute #{name}"
-	        return $!.backtrace.unshift($!.to_s).join("\n").encode('gbk', 'utf-8', replace: '?')
+	        return $!.backtrace.unshift($!.to_s).join("\n").openrobot_encoding
         end
       else
       begin
@@ -216,7 +230,7 @@ module OpenRobot
         ret
        rescue Exception
          # return "Error 102: can't execute #{name}"
-	        return $!.backtrace.unshift($!.to_s).join("\n").encode('gbk', 'utf-8', replace: '?')
+	        return $!.backtrace.unshift($!.to_s).join("\n").openrobot_encoding
         end
     end
   

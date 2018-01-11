@@ -4,6 +4,10 @@ module Privilege
   Relation = SQLite3::Database.new('database/relation.db')
   Error    = Class.new Exception
 
+  DEFAULT_EXPIRE = lambda{|x|
+    x.to_i + 3600 * 30
+  }
+
   def self.user_has_privilege(user_id, priv)
     priv_id = find_priv_id(priv)
     if !priv_id          
@@ -39,12 +43,12 @@ module Privilege
     Relation.execute "delete from user_group where user_id = ? and group_id = ?", user_id, group_id
   end
 
-  def self.allow_user(user_id, priv)
+  def self.allow_user(user_id, priv, expire = DEFAULT_EXPIRE.call(Time.now.to_i))
     priv_id = find_priv_id(priv)
     if !priv_id
        raise Error, "Error 106: no such permission #{priv}"
     end
-    Relation.execute "insert into user_privilege values (?, ?)", user_id, priv_id
+    Relation.execute "insert into user_privilege values (?, ?, ?)", user_id, priv_id, expire
   end
 
   
@@ -57,7 +61,7 @@ module Privilege
   end
 
 
- def self.allow_group(group, priv)
+ def self.allow_group(group, priv, expire = DEFAULT_EXPIRE.call(Time.now.to_i))
     group_id = find_group_id group
     if !group_id
        raise Error, "Error 105: no such group #{group}"
@@ -66,7 +70,7 @@ module Privilege
     if !priv_id
        raise Error, "Error 106: no such permission #{priv}"
     end
-    Relation.execute "insert into group_privilege values (?, ?)", group_id, priv_id
+    Relation.execute "insert into group_privilege values (?, ?, ?)", group_id, priv_id, expire
   end
 
  def self.deny_group(group, priv)
@@ -98,11 +102,13 @@ module Privilege
   end
   
   def self.find_group_priv(group_id)
-    Relation.execute("select privilege_id from group_privilege where group_id = ?", group_id).flatten
+    now = Time.now.to_i
+    Relation.execute("select privilege_id from group_privilege where group_id = ? and (ifnull(expire_at, 2147483647) >= ?)", group_id, now).flatten
   end
 
   def self.find_user_priv(user_id)
-    Relation.execute("select privilege_id from user_privilege where user_id = ?", user_id).flatten
+    now = Time.now.to_i
+    Relation.execute("select privilege_id from user_privilege where user_id = ? and (ifnull(expire_at, 2147483647) >= ?) ", user_id, now).flatten
   end
 
   def self.find_user_all_priv(user_id)
