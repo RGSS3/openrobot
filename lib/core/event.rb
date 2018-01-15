@@ -28,7 +28,7 @@ module OpenRobot
   PROCS    = {}
   DEFERED  = {}
   SESSIONS = {}
-  TIMEOUT  = 1
+  TIMEOUT  = 0.01
   SESSION_ID = {value: 0}
   
   #todo 
@@ -164,7 +164,9 @@ module OpenRobot
           return  "Error 100: can't run #{$1} from #{fromQQ}, user/group not allowed".openrobot_encoding
         end
         begin
-          require "lib/commands/#{name}.rb"
+          unless OpenRobot::Command.respond_to?("do_#{name}")
+            require "lib/commands/#{name}.rb"
+          end
         rescue LoadError
           return "Error 101: no such special command #{name}".openrobot_encoding
         end
