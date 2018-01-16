@@ -8,7 +8,33 @@ module Resource
     (Table.execute("select name from resource where id = ?", id) || []).flatten[0]
   end
 
+  def self.shrink(id, user_id)
+     a = Table.execute("select amount,  operate_at from user_resource where rsrcid=? and userid=?", id, user_id)[0] || []
+    (amount, operate_at)  = a
+    ((capacity, regen),) = Table.execute("select capacity, regen from resource where id = ?", id)
+    if !operate_at
+      if (capacity || 0) > 0
+        if !Table.execute("select * from user_resource where rsrcid=? and userid=?", id, user_id).empty?
+          Table.execute "update user_resource set amount = ?, operate_at = ? where rsrcid=? and userid=?", capacity, Time.now.to_i, id, user_id
+        else
+          Table.execute "insert into user_resource (userid, rsrcid, amount, expire_at, operate_at) values (?, ?, ?, ?, ?)", user_id, id, capacity, nil, Time.now.to_i
+        end
+        return 
+      end
+    end
+    if (regen || 0) > 0
+      tm = (Time.now.to_i - operate_at) / 60
+      add = tm * regen
+      if add > 0
+        value = (amount || 0) + add
+        value = [value, capacity].min if capacity
+        Table.execute "update user_resource set amount = ?, operate_at = ? where rsrcid=? and userid=?", value, operate_at + tm * 60, id, user_id
+      end
+    end
+  end
+
   def self.alter(id, user_id, amount = nil)
+    self.shrink(id, user_id)
     if !Table.execute("select * from user_resource where rsrcid=? and userid=?", id, user_id).empty?
        if amount 
          Table.execute "update user_resource set amount = amount + ? where rsrcid = ? and userid = ?", amount, id, user_id
@@ -19,6 +45,7 @@ module Resource
   end
 
   def self.get(id, user_id)
+    self.shrink(id, user_id)
     (Table.execute("select amount from user_resource where rsrcid=? and userid=?", id, user_id) || []).flatten[0]
   end
 
@@ -45,7 +72,14 @@ module Resource
       false
     end
   end
-
+  require 'digest/md5'
+  def self.gen_coupon(rsrcid, amount, stock = 1, prefix = "")
+    name = prefix + Time.now.to_i.to_s(16).rjust(8, '0A').upcase + Digest::MD5.hexdigest(Random.new.bytes(64)).upcase
+    Table.execute "insert into coupon (name, code, used_at, rsrcid, amount, stock) values (?, ?, ?, ?, ?, ?)", name, name, nil, rsrcid, amount, stock
+    name
+  rescue
+    $!.backtrace.unshift($!.to_s)
+  end
   ResourceModule = self
 
   class Resource
