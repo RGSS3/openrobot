@@ -25,6 +25,7 @@ module OpenRobot
   DeferedValue = Struct.new :obj
   Session = Struct.new :store, :handler, :clients, :mutex, :thread
   JoinSession = Struct.new :client
+  PrivateMessage = Struct.new :message, :client
   PROCS    = {}
   DEFERED  = {}
   SESSIONS = {}
@@ -40,6 +41,8 @@ module OpenRobot
           SESSIONS[session_id].store = nil
         end
         run << [info[:all][2], value.openrobot_encoding]
+      when PrivateMessage === value
+        run << [value.client, value.message.openrobot_encoding]
       when Store === value
         Intepreter.call(value.message, info, handler, run, defer, session_id)
         if session_id

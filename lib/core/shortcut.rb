@@ -20,6 +20,11 @@ def HTTPS(uri, *a)
   end
 end
 
+def PM(*a)
+  O::PrivateMessage.new *a
+end
+
+
 def HTTP(uri, *a)
    url = URI(uri)
    Net::HTTP.start(url.host, url.port, *a) do |http|
@@ -51,6 +56,9 @@ def join_all
   join_same_group(:all)
 end
 
+def RES(n)
+  Resource::Resource.new(n)
+end
 class SessionHelper
    attr_accessor :data
    attr_accessor :events
@@ -279,4 +287,38 @@ class Res
   end
 
   
+end
+
+def DIS(hash)
+  u = hash.values.inject(:+)
+  val = rand(u)
+  hash.each{|k, v|
+    return k if val < v
+    val -= v
+  }
+end
+
+class LSReference
+  def initialize(*args)
+    @path = args
+    if !LocalStorage.get('ref', @path)
+      LocalStorage.set('ref', @path, {})
+    end
+  end
+  def set(a, b)
+    LocalStorage.set('ref', @path + [a], b)
+  end
+  def get(a)
+    LocalStorage.get('ref', @path + [a])
+  end
+  alias []  get
+  alias []= set
+end
+
+def LSREF(key, lb = nil, &bl)
+  r = lb || bl
+  lambda{|info|
+    info[:ls] = LSReference.new(info[:group], info[:qq], key)
+    r.call(info)
+  }
 end
