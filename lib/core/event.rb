@@ -1,16 +1,16 @@
 require 'timeout'
 require 'thread'
-
+require 'cgi'
 class String
-  if RUBY_VERSION < "2.4"
+  #if RUBY_VERSION < "2.4"
     def openrobot_encoding
-      encode('gbk', 'utf-8', replace: '?')
+      encode('gbk', 'utf-8', replace: '?', invalid: :replace, undef: :replace, fallback: '?')
     end
-  else
-    def openrobot_encoding
-      self
-    end
-  end
+  #else
+  #  def openrobot_encoding
+  #    self
+  #  end
+  #end
 end
 module OpenRobot
   class << self
@@ -29,6 +29,8 @@ module OpenRobot
   PROCS    = {}
   DEFERED  = {}
   SESSIONS = {}
+  Registering = {}
+  Registry = {}
   TIMEOUT  = 0.01
   SESSION_ID = {value: 0}
   
@@ -127,6 +129,9 @@ module OpenRobot
   end
 
   def self.on_idle
+    if !ARGV.include?('--service')
+      return OpenRobotServer.on_idle
+    end
     begin
         ret = []
            
@@ -150,10 +155,13 @@ module OpenRobot
   
   #def self.on_group(subtype, sendtime, fromGroup, fromQQ, anonymous, msg, font)
   def self.on_group(*args)
-    return if  !GROUP.include?(args[2]) && !Privilege.user_has_privilege(args[2], 'grouptalk') 
+    msg = CGI.unescapeHTML(args[-2].force_encoding("GBK").encode('utf-8', 'gbk', replace: '?', invalid: :replace, undef: :replace, fallback: '?')) 
+    if !ARGV.include?('--service')
+      return OpenRobotServer.on_group *args
+    end
+    return if  !Privilege.user_has_privilege(args[2], 'grouptalk') 
     return if  Privilege.user_has_privilege(args[3], 'ban')
     self.current = args
-    msg = CGI.unescapeHTML((args[-2].force_encoding("GBK")).encode("UTF-8"))
     fromQQ = args[3]
     fromGroup = args[2]
     case msg 
@@ -243,6 +251,11 @@ module OpenRobot
 
   
   def self.register(cond, lb = nil, &bl)
+    id = self::Registering[:id]
+    if id
+      self::Registry[id] ||= {:requests => {}}
+      self::Registry[id][:requests][cond] = lb || bl
+    end
     PROCS[cond] ||= []
     PROCS[cond] << (lb || bl)
   end

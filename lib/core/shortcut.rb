@@ -11,14 +11,18 @@ def S(*args)
   O::Store.new(*args)
 end
 
-def HTTPS(uri, *a)
+def HTTPS(uri, host = nil, port = nil)
    url = URI(uri)
-   Net::HTTP.start(url.host, url.port, *a, use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_NONE) do |http|
+   host ||= ENV['HTTP_PROXY'].split(":")[0]
+   port ||= ENV['HTTP_PROXY'].split(":")[1].to_i
+   Net::HTTP.start(url.host, url.port, host, port, use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_NONE) do |http|
     request = Net::HTTP::Get.new(url.request_uri)
     response = http.request(request)
     response.body
   end
 end
+
+
 
 def PM(*a)
   O::PrivateMessage.new *a
@@ -32,6 +36,16 @@ def HTTP(uri, *a)
     response = http.request(request)
     response.body
   end
+end
+
+def HTTPPost(uri, data, *a)
+  url = URI(uri)
+  Net::HTTP.start(url.host, url.port, *a) do |http|
+   request = Net::HTTP::Post.new(url.request_uri)
+   request.body = data
+   response = http.request(request)
+   response.body
+ end
 end
 
 def D(&block)

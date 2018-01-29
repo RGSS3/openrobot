@@ -1,4 +1,4 @@
-
+require 'sqlite3'
 module Privilege
   Entity   = SQLite3::Database.new('database/entity.db')
   Relation = SQLite3::Database.new('database/relation.db')
@@ -30,7 +30,7 @@ module Privilege
   def self.add_user(user_id, group)
     group_id = find_group_id group
     if !group_id
-       raise Error, "Error 105: no such group #{group}"
+       raise Error, "Error 105: no such group #{group}", priv_id
     end
     Relation.execute "insert into user_group values (?, ?)", user_id, group_id
   end

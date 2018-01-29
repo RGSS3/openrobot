@@ -26,7 +26,7 @@ module Resource
       tm = (Time.now.to_i - operate_at) / 60
       add = tm * regen
       if add > 0
-        if (amount || 0) < capacity
+        if (amount || 0) < (capacity || 1 << 100)
           value = (amount || 0) + add
           value = [value, capacity].min if capacity
           Table.execute "update user_resource set amount = ?, operate_at = ? where rsrcid=? and userid=?", value, operate_at + tm * 60, id, user_id

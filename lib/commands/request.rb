@@ -1,11 +1,10 @@
 #encoding: utf-8
-require 'digest/md5'
 module OpenRobot
   module Command
     Request = SQLite3::Database.new('database/request.db')
     def self.do_request(str)
       user_id = OpenRobot.current[3]
-      hash = Digest::MD5.hexdigest(Time.now.to_s + rand(1048576).to_s)
+      hash =md5(Time.now.to_s + rand(1048576).to_s)
       Request.execute "insert into request values (NULL, ?, ?, ?, NULL, 0)", hash, str, user_id 
       id = Request.execute "select id from request where hash = ?", hash
       id = id.flatten[0]
@@ -57,6 +56,7 @@ module OpenRobot
       error = 0
       Request.execute("select id from runtime_scripts").flatten.each{|x|
         next if !x
+        OpenRobot.const_set :Registering, {:id => x}
         hash, res, user_id = Request.execute("select hash, content, user_id from request where id = ?", x).flatten
         begin
            #eval "lambda{\n#{res}\n}.call", _newbinding, "<request:#{x}>", 1
@@ -64,7 +64,7 @@ module OpenRobot
            count += 1
         rescue Exception
            Request.execute("delete from runtime_scripts where id = ?", x).flatten
-           ret << "#{user_id} #{x}发生错误 #{$!.to_s}"
+           ret << "#{user_id} #{x}发生错误"
            error += 1
         end
       }
