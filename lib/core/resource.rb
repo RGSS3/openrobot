@@ -28,9 +28,11 @@ module Resource
       if add > 0
         if (amount || 0) < (capacity || 1 << 100)
           value = (amount || 0) + add
-          value = [value, capacity].min if capacity
-          Table.execute "update user_resource set amount = ?, operate_at = ? where rsrcid=? and userid=?", value, operate_at + tm * 60, id, user_id
+          value = [value, capacity].min if capacity  
+        else
+          value = (amount || 0)
         end
+        Table.execute "update user_resource set amount = ?, operate_at = ? where rsrcid=? and userid=?", value, operate_at + tm * 60, id, user_id
       end
     end
   end

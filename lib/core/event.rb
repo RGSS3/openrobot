@@ -149,7 +149,7 @@ module OpenRobot
 
         ret
     rescue Exception
-        return $!.backtrace.unshift($!.to_s).join("\n").openrobot_encoding
+        return $!.backtrace.unshift($!.to_s).join("\n").openrobot_encoding if ARGV.include?('--service')
     end
   end
   
@@ -229,13 +229,13 @@ module OpenRobot
                      Runner.call(z, {message: msg, match: $~, qq: args[3], all: OpenRobot.current, store: nil}, ret, DEFERED, nil)
                  rescue Exception
                      STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
-		                 ret << $!.backtrace.unshift($!.to_s).join("\n")
+		                 ret << $!.backtrace.unshift($!.to_s).join("\n") if ARGV.include?('--service')
                  end
                }
              end
           rescue Exception
                      STDERR.puts $!.backtrace.unshift($!.to_s).join("\n")
-		                 ret << $!.backtrace.unshift($!.to_s).join("\n")
+		                 ret << $!.backtrace.unshift($!.to_s).join("\n") if ARGV.include?('--service')
           end
         }
      
@@ -243,11 +243,13 @@ module OpenRobot
         ret
        rescue Exception
          # return "Error 102: can't execute #{name}"
-	        return $!.backtrace.unshift($!.to_s).join("\n").openrobot_encoding
+	        return $!.backtrace.unshift($!.to_s).join("\n").openrobot_encoding if ARGV.include?('--service')
         end
     end
-  
-  end
+    rescue Exception
+    # return "Error 102: can't execute #{name}"
+     return $!.backtrace.unshift($!.to_s).join("\n").openrobot_encoding if ARGV.include?('--service')
+  end 
 
   
   def self.register(cond, lb = nil, &bl)
@@ -255,6 +257,7 @@ module OpenRobot
     if id
       self::Registry[id] ||= {:requests => {}}
       self::Registry[id][:requests][cond] = lb || bl
+      self::Registry[id][:owner] = self::Registering[:owner]
     end
     PROCS[cond] ||= []
     PROCS[cond] << (lb || bl)

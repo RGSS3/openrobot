@@ -1,10 +1,11 @@
 #encoding: utf-8
+require 'digest/md5'
 module OpenRobot
   module Command
     Request = SQLite3::Database.new('database/request.db')
     def self.do_request(str)
       user_id = OpenRobot.current[3]
-      hash =md5(Time.now.to_s + rand(1048576).to_s)
+      hash =Digest::MD5.hexdigest(Time.now.to_s + rand(1048576).to_s)
       Request.execute "insert into request values (NULL, ?, ?, ?, NULL, 0)", hash, str, user_id 
       id = Request.execute "select id from request where hash = ?", hash
       id = id.flatten[0]
@@ -51,13 +52,16 @@ module OpenRobot
     def self.do_reset(str)
       OpenRobot::PROCS.clear
       OpenRobot::SESSIONS.clear
+      OpenRobot::Registry.clear
+      v = $VERBOSE
+      $VERBOSE = nil
       ret = []
       count = 0
       error = 0
       Request.execute("select id from runtime_scripts").flatten.each{|x|
         next if !x
-        OpenRobot.const_set :Registering, {:id => x}
         hash, res, user_id = Request.execute("select hash, content, user_id from request where id = ?", x).flatten
+        OpenRobot.const_set :Registering, {:id => x, :owner => user_id}
         begin
            #eval "lambda{\n#{res}\n}.call", _newbinding, "<request:#{x}>", 1
            Handler.exec_script(res)
@@ -68,12 +72,31 @@ module OpenRobot
            error += 1
         end
       }
+      Dir.glob("./gits/*") do |f|
+        next if !FileTest.directory?(f)
+        dir = f.tr("/", "\\")
+        owner = %x{cd #{dir} & git remote -v}[%r{https?://github.com/(\S+)},1]
+        OpenRobot.const_set :Registering, {:id => dir, :owner => owner}
+        if !system("cd #{dir} & git pull origin master")
+          ret << "#{owner} #{dir}发生错误"
+          error += 1
+        else
+          begin
+            Handler.exec_script File.read File.join(f, "main.rb")
+            count += 1
+          rescue Exception
+            error += 1
+            ret << "#{owner} #{dir}发生错误 #{$!.to_s}"
+          end
+       end
+      end
       ret << "#{count} 载入完成, #{error} 发生错误"
       $".delete_if{|x| x["/lib/command"]}
       ret.join("\n")
     rescue Exception
         $!.backtrace.unshift($!.to_s).join("\n")
-         
+    ensure
+        $VERBOSE = v
     end
 
     def self.do_vote(str)

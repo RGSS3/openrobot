@@ -11,17 +11,41 @@ def S(*args)
   O::Store.new(*args)
 end
 
-def HTTPS(uri, host = nil, port = nil)
-   url = URI(uri)
-   host ||= ENV['HTTP_PROXY'].split(":")[0]
-   port ||= ENV['HTTP_PROXY'].split(":")[1].to_i
-   Net::HTTP.start(url.host, url.port, host, port, use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_NONE) do |http|
-    request = Net::HTTP::Get.new(url.request_uri)
-    response = http.request(request)
-    response.body
-  end
+
+
+
+
+def GET(uri, host = nil, port = nil)
+  url = URI(uri)
+  r = URI(ENV['HTTP_PROXY']|| "")
+  host ||= r.host
+  port ||= r.port
+  Net::HTTP.start(url.host, url.port, host, port, use_ssl: url.scheme == "https", verify_mode: OpenSSL::SSL::VERIFY_NONE) do |http|
+   request = Net::HTTP::Get.new(url.request_uri)
+   response = http.request(request)
+   response.body
+ end
+rescue
+  nil
 end
 
+alias HTTP GET
+alias HTTPS GET
+
+def POST(uri, data = {}, host = nil, port = nil)
+  url = URI(uri)
+  r = URI(ENV['HTTP_PROXY'] || "")
+  host ||= r.host
+  port ||= r.port
+  Net::HTTP.start(url.host, url.port, host, port, use_ssl: url.scheme == "https", verify_mode: OpenSSL::SSL::VERIFY_NONE) do |http|
+   request = Net::HTTP::Post.new(url.request_uri)
+   request.body = data
+   response = http.request(request)
+   response.body
+ end
+rescue
+  nil
+end
 
 
 def PM(*a)
@@ -335,4 +359,21 @@ def LSREF(key, lb = nil, &bl)
     info[:ls] = LSReference.new(info[:group], info[:qq], key)
     r.call(info)
   }
+end
+
+class WebSession
+  def initialize(uri)
+    @uri = URI uri
+  end
+  def call(info)
+    u = info.merge(store: info[:store] && info[:store].to_h)
+    ret = JSON.parse(POST(@uri, JSON.dump(u)))
+    if ret["env"]
+      S ret["message"], ret["env"]
+    else
+      ret["message"]
+    end
+  rescue
+    S "连接异常，请重试", info[:store] && info[:store].env
+  end
 end
